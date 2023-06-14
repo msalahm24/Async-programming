@@ -2,47 +2,40 @@ package main
 
 import (
 	"fmt"
-	"net/http"
+	"sync"
 )
 
-type urlStatus struct {
-	url    string
-	status bool
+type Container struct {
+	mu      sync.Mutex
+	counter map[string]int
+}
+
+func (c *Container) inc(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.counter[name]++
 }
 
 func main() {
-	urls := []string{
-		"https://www.easyjet.com/",
-		"https://www.skyscanner.de/",
-		"https://www.ryanair.com",
-		"https://wizzair.com/",
-		"https://www.swiss.com/",
-	}
-	ch := make(chan urlStatus, len(urls))
-	for _, url := range urls {
-		checkUrl(url, ch)
+	c := Container{
+		mu:      sync.Mutex{},
+		counter: map[string]int{},
 	}
 
-	results := make([]urlStatus, len(urls))
+	var wg sync.WaitGroup
 
-	for i,_ := range results {
-		results[i] = <- ch
-		if results[i].status{
-			fmt.Println(results[i].url + " " + "is up")
+	doIncre := func(name string, n int) {
+		for i := 0; i < n; i++ {
+			c.inc(name)
 		}
-		if ! results[i].status{
-			fmt.Println(results[i].url + " " + "is down")
-		}
+		wg.Done()
 	}
+	wg.Add(4)
+	go doIncre("a", 100)
+	go doIncre("b", 100)
+	go doIncre("a", 100)
+	go doIncre("b", 100)
+	wg.Wait()
 
-}
-
-func checkUrl(url string, ch chan urlStatus) {
-	_, err := http.Get(url)
-
-	if err != nil {
-		ch <- urlStatus{url: url, status: false}
-		return
-	}
-	ch <- urlStatus{url: url, status: true}
+	fmt.Println(c.counter)
 }
