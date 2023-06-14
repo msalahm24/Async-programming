@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"sync"
-	
 )
 
-func main(){
+type urlStatus struct {
+	url    string
+	status bool
+}
+
+func main() {
 	urls := []string{
 		"https://www.easyjet.com/",
 		"https://www.skyscanner.de/",
@@ -15,22 +18,31 @@ func main(){
 		"https://wizzair.com/",
 		"https://www.swiss.com/",
 	}
-	var wg sync.WaitGroup
-	for _,url :=range urls{
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
-			checkUrl(url)
-		}(url)
+	ch := make(chan urlStatus, len(urls))
+	for _, url := range urls {
+		checkUrl(url, ch)
 	}
-	wg.Wait()
+
+	results := make([]urlStatus, len(urls))
+
+	for i,_ := range results {
+		results[i] = <- ch
+		if results[i].status{
+			fmt.Println(results[i].url + " " + "is up")
+		}
+		if ! results[i].status{
+			fmt.Println(results[i].url + " " + "is down")
+		}
+	}
+
 }
 
-func checkUrl(url string){
-	_,err := http.Get(url)
+func checkUrl(url string, ch chan urlStatus) {
+	_, err := http.Get(url)
 
-	if err != nil{
-		fmt.Println("this site is down")
+	if err != nil {
+		ch <- urlStatus{url: url, status: false}
+		return
 	}
-	fmt.Println("this site is up")
+	ch <- urlStatus{url: url, status: true}
 }
